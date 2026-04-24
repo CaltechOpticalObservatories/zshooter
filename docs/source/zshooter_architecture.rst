@@ -1,5 +1,5 @@
-Zshooter System Architecture
-============================
+ICS Architecture
+================
 
 Overview
 --------

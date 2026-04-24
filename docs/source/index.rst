@@ -1,17 +1,13 @@
-.. ZShooter documentation master file, created by
-   sphinx-quickstart on Mon Mar 23 11:26:28 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+ZShooter Instrument Control System
+==================================
 
-ZShooter documentation
-======================
+ZShooter's Instrument Control Package
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+- :doc:`Architecture Document <zshooter_architecture>`
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+
+   zshooter_architecture
