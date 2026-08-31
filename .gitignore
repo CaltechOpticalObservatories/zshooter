@@ -159,3 +159,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .idea
+
+# macOS
+.DS_Store
+
+# Sphinx build output (this project uses docs/build, not docs/_build)
+docs/build/
