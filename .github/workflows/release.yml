@@ -1,0 +1,54 @@
+name: Release
+
+# Tagging is the release mechanism. setuptools-scm derives the package version
+# from the git tag, so `git tag -a v1.2.0` is what produces version 1.2.0 --
+# there is no version string to edit and no way for the two to disagree.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install -U pip build twine
+          python -m build
+
+      - name: Check metadata
+        run: twine check dist/*
+
+      # Guard against a tag that setuptools-scm resolves to something else --
+      # for example a tag placed on a dirty tree, or a malformed tag name.
+      - name: Verify version matches tag
+        run: |
+          python -m pip install -e .
+          pkg_version=$(python -c "import zshooter; print(zshooter.__version__)")
+          tag_version="${GITHUB_REF_NAME#v}"
+          echo "tag=${tag_version}  package=${pkg_version}"
+          if [ "${pkg_version}" != "${tag_version}" ]; then
+            echo "::error::Package version ${pkg_version} does not match tag ${tag_version}"
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          # A pre-release tag (v1.2.0rc1) is marked as such automatically so it
+          # is never mistaken for a summit-deployable version.
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'a') || contains(github.ref_name, 'b') }}

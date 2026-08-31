@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zshooter"
+description = "Instrument control software for the ZShooter multi-channel imaging spectrograph"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Caltech Optical Observatories (COO)" }]
+keywords = ["astronomy", "instrument-control", "observatory", "spectrograph"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dynamic = ["version"]
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Messaging layer. Not on PyPI, so it is kept out of the core dependencies to
+# keep `pip install -e .` working without network access to the COO org.
+#   pip install -e ".[daemon]"
+daemon = [
+    "libby @ git+https://github.com/CaltechOpticalObservatories/libby",
+]
+
+docs = [
+    "sphinx>=7.0",
+    "sphinxcontrib-mermaid>=0.9",
+    "shibuya",
+]
+
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[project.urls]
+Documentation = "https://github.com/CaltechOpticalObservatories/zshooter"
+Source = "https://github.com/CaltechOpticalObservatories/zshooter"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Hardware tests are deselected by default. They need real devices attached and
+# must never run by accident -- not in CI, not on a laptop. Opt in explicitly
+# with `pytest -m hardware`.
+addopts = "-ra --strict-markers -m 'not hardware'"
+markers = [
+    "daemon: one daemon against its simulated driver",
+    "integration: several daemons plus the sequencer, all simulated",
+    "interface: GUI or CLI against a fully simulated instrument",
+    "hardware: requires real instrument hardware; deselected by default",
+]
+
+[tool.coverage.run]
+source = ["src/zshooter"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

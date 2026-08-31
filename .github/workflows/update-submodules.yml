@@ -1,0 +1,62 @@
+name: Update driver submodules
+
+# Drivers are consumed as pinned git submodules. This opens a PR when an
+# upstream driver moves, so the update is reviewed and CI-tested rather than
+# arriving unnoticed -- pinning is the point, and this keeps the pin current
+# without making it silent.
+on:
+  schedule:
+    - cron: "0 2 * * 1"  # Mondays, 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update submodules to latest
+        id: update
+        run: |
+          if [ ! -f .gitmodules ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No submodules configured yet."
+            exit 0
+          fi
+          git submodule update --remote --init --recursive
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No submodule updates found."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            git diff --submodule=short
+          fi
+
+      - name: Create pull request
+        if: steps.update.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update driver submodules"
+          title: "chore: update driver submodules"
+          body: |
+            Updates pinned driver submodules to their latest upstream commits.
+
+            Review the driver changelogs before merging. A driver change can
+            alter timing or error behaviour that daemons depend on.
+          branch: automated/update-submodules
+          delete-branch: true
+          labels: |
+            automated
+            dependencies

@@ -17,7 +17,11 @@ extensions = [
     "sphinxcontrib.mermaid",
 ]
 templates_path = ['_templates']
-exclude_patterns = []
+
+# The requirements section is hidden for now: the L1/L2/L3 baseline has not
+# been ingested, so the pages are placeholders. Remove this entry and restore
+# `requirements/index` to the toctree in index.rst to bring it back.
+exclude_patterns = ['requirements/**']
 
 
 

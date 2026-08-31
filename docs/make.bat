@@ -3,23 +3,27 @@
 pushd %~dp0
 
 REM Command file for Sphinx documentation
+REM
+REM Sphinx is invoked through the active Python rather than a bare
+REM `sphinx-build` on PATH, so an activated virtualenv is always the one used.
 
+if "%PYTHON%" == "" (
+	set PYTHON=python
+)
 if "%SPHINXBUILD%" == "" (
-	set SPHINXBUILD=sphinx-build
+	set SPHINXBUILD=%PYTHON% -m sphinx
 )
 set SOURCEDIR=source
 set BUILDDIR=build
 
-%SPHINXBUILD% >NUL 2>NUL
-if errorlevel 9009 (
+%PYTHON% -c "import sphinx, sphinxcontrib.mermaid, shibuya" >NUL 2>NUL
+if errorlevel 1 (
 	echo.
-	echo.The 'sphinx-build' command was not found. Make sure you have Sphinx
-	echo.installed, then set the SPHINXBUILD environment variable to point
-	echo.to the full path of the 'sphinx-build' executable. Alternatively you
-	echo.may add the Sphinx directory to PATH.
+	echo.Documentation dependencies are missing from the active environment.
 	echo.
-	echo.If you don't have Sphinx installed, grab it from
-	echo.https://www.sphinx-doc.org/
+	echo.Install them with:
+	echo.    pip install -e ".[docs]"
+	echo.
 	exit /b 1
 )
 
