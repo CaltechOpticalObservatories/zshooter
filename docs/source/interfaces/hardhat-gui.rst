@@ -17,13 +17,13 @@ mechanism, which is exactly what the observer GUI must not do.
 Relationship to the backend
 ---------------------------
 
-The hard hat GUI addresses device daemons directly, under the explicit
-engineering authority described in :doc:`../architecture/authority`.
+The hard hat GUI addresses device daemons directly, with the affected
+subsystem in the engineering mode described in :doc:`../operations/modes`.
 
 .. mermaid::
 
    flowchart LR
-       HH["Hard hat GUI"] -->|"direct, engineering authority"| D["device daemons"]
+       HH["Hard hat GUI"] -->|"direct keyword access"| D["device daemons"]
        HH -->|"sequencer operations"| SEQ["zsseq_obs"]
        D -.->|"PUB full keyword state"| HH
 
@@ -35,7 +35,7 @@ Content
 -------
 
 **Daemon roster**: every daemon, its state, heartbeat age, connection status,
-active fault, current owner, and configuration version. Whether a daemon has
+active fault, current mode, and configuration version. Whether a daemon has
 stopped publishing is visible at a glance.
 
 **Per-daemon panels**: for each daemon, the full keyword surface: every value,
@@ -72,9 +72,9 @@ subject to daemon validation, for cases the panels do not anticipate.
 Entering and leaving
 --------------------
 
-Entry is explicit, per subsystem, and refused while a sequence is running. The
-engineer's identity is recorded and published in the affected daemons'
-``owner`` keyword.
+Entry is explicit, per subsystem, and refused while a sequence is running.
+The affected daemons report ``engineering`` in their ``mode`` keyword for as
+long as it lasts.
 
 Entry is announced. The observer GUI shows a persistent banner; the event
 stream records it. There is no quiet engineering mode: an observer who does not

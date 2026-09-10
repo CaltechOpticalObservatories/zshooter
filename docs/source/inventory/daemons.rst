@@ -4,29 +4,23 @@ Daemon inventory
 How the inventory was derived
 -----------------------------
 
-Daemons are drawn at **hardware ownership boundaries**: one daemon per
-controller or fieldbus, owning every mechanism attached to it.
+Two things shape it.
 
-The reason is arbitration. Mechanisms sharing an EtherCAT bus, a Newport
-controller, or a Lakeshore chassis cannot be owned by separate processes
-without inventing a bus-arbiter to sit between them, which is a daemon by
-another name, with the additional drawback that the safety logic and the bus
-access then live in different processes. Grouping by ownership keeps each
-daemon's safety reasoning and its hardware access in the same place.
+**The instrument is four assemblies.** The front-end, the imager, the VIS
+spectrograph, and the NIR spectrograph are separately supported, separately
+alignable, and separately removable for servicing. The ICS follows that
+division, so that a subsystem can be worked on, tested, and brought up on the
+bench without the rest of the instrument.
 
-This yields roughly twenty daemons rather than one per mechanism (~30) or one
-per subsystem (~7). Recorded as ADR-0001 in :doc:`../decisions/index`.
+**Daemons are drawn at hardware ownership boundaries**: one daemon per
+controller or fieldbus, owning every mechanism attached to it. Mechanisms
+sharing an EtherCAT bus or a Lakeshore chassis cannot be owned by separate
+processes without a bus arbiter, which is a daemon by another name and one
+that separates safety logic from hardware access. Recorded as ADR-0001 in
+:doc:`../decisions/index`.
 
-.. warning:: **Provisional mapping**
-
-   The grouping below assumes a controller topology that has not yet been
-   confirmed. Where several mechanisms are shown under one daemon, that is a
-   claim that they share a controller. **Each of these groupings must be
-   checked against the as-built electronics design**, and daemons split or
-   merged accordingly. The *rule* is settled; this *application* of it is not.
-
-   The inventory has also not yet been reconciled against the L1/L2/L3
-   requirements baseline.
+The instrument has **33 controlled motion axes** and **11 detector systems**.
+Grouping by ownership gives 18 daemons.
 
 Naming
 ------
@@ -40,225 +34,243 @@ Peer identity is ``<group>_<scope>``; keyword address is
 
    * - Group
      - Domain
+   * - ``zsfe``
+     - Front-end: beam routing and calibration sources
    * - ``zsimg``
-     - ZImager channel
+     - Imager mechanisms
+   * - ``zsvis``
+     - VIS spectrograph mechanisms
    * - ``zsnir``
-     - ZSpec nIR channel
-   * - ``zsblue``
-     - ZSpec Blue arm
-   * - ``zsred``
-     - ZSpec Red arm
+     - NIR spectrograph mechanisms
    * - ``zscam``
-     - Detector controllers
-   * - ``zscal``
-     - Calibration and lightpath
-   * - ``zshk``
+     - Detector readout services
+   * - ``zshouse``
      - Housekeeping and infrastructure
    * - ``zskeck``
-     - Gateways to WMKO messaging domains
+     - Gateways to WMKO domains
    * - ``zsseq``
      - Sequencing and coordination
 
-Device daemons
---------------
-
-ZImager
-~~~~~~~
+Front-end
+---------
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 28 30 24
+   :widths: 18 24 34 24
+
+   * - Peer
+     - Owns
+     - Mechanisms
+     - Driver
+   * - ``zsfe_selector``
+     - Front-end selector bus
+     - Mirror selector mechanisms: full field to the imager, apertured
+       fold-flat passing the central 30" to the spectrographs, and 60 degree
+       routing to platform neighbours
+     - ``coo-ethercat``
+   * - ``zsfe_cal``
+     - Calibration sources
+     - Integrating sphere, emission-line lamps, continuum sources, and any
+       mechanism that deploys them
+     - ``pdu``, vendor lamp control
+
+The front-end decides what light goes where, which makes ``zsfe_selector``
+the most operationally significant mechanism daemon in the instrument. Its
+state determines whether the spectrographs are receiving light at all, so the
+sequencer and both GUIs gate on it and every calibration interlock is
+conditioned on it.
+
+Calibration belongs to the front-end rather than to a separate assembly
+because the integrating sphere feeds the same beam path the selector
+controls. That adjacency is what lets the imager and the spectrographs be
+co-calibrated against one common source.
+
+Imager
+------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 24 34 24
 
    * - Peer
      - Owns
      - Mechanisms
      - Driver
    * - ``zsimg_motion``
-     - ZImager motion bus
-     - u rotator, variable rotator, z rotator, slit, focus, filter
+     - Imager motion bus
+     - Common refractive ADC, selectable filter in the middle channel, three
+       rotating detector assemblies
      - ``coo-ethercat``
-   * - ``zsimg_adc``
-     - u-channel ADC controller
-     - ADC prism pair (counter-rotating)
-     - ``coo-ethercat`` or ``newport``: TBC
 
-The ADC is shown separately because ADC prism pairs are commonly driven as a
-coordinated pair with their own controller and their own dispersion solution.
-If it shares the ZImager bus, merge it into ``zsimg_motion``.
+The ``u`` and ``z`` channels carry fixed broadband filters and have no filter
+mechanism. Only the middle channel is selectable.
 
-ZSpec nIR
-~~~~~~~~~
+The three detector rotators are separate axes but are commanded together: the
+channels are co-aligned, and a differential rotation between them is a fault
+rather than a configuration.
+
+Spectrographs
+-------------
+
+The two spectrographs are optically and mechanically parallel. Each has the
+same five mechanism types in its pre-optics, and the arms downstream are
+fixed-format with no moving parts at all.
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 28 30 24
+   :widths: 18 24 34 24
 
    * - Peer
      - Owns
      - Mechanisms
      - Driver
+   * - ``zsvis_motion``
+     - VIS pre-optics bus
+     - Slit, tip/tilt, focus, ADC, K-mirror
+     - ``coo-ethercat``
    * - ``zsnir_motion``
-     - nIR motion bus
-     - nod, rotator, field stop, slit, focus
+     - NIR pre-optics bus
+     - Slit, tip/tilt, focus, ADC, K-mirror, all cryogenic
      - ``coo-ethercat``
-   * - ``zsnir_thermal``
-     - nIR Lakeshore chassis
-     - Detector and bench temperature control loops, heaters
-     - ``lakeshore``
-   * - ``zsnir_cryo``
-     - Cryomech compressor
-     - Pulse-tube cooler: state, power, fault reporting
-     - ``cryomech`` (new)
 
-The nod mechanism is on the motion bus but is operationally distinct: it is
-commanded inside the exposure loop rather than during configuration, so its
-command timing and its interaction with detector readout need separate
-treatment in the sequencer. See :doc:`../operations/workflows`.
-
-ZSpec Blue
-~~~~~~~~~~
+These should share one daemon implementation parameterised by configuration.
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 28 30 24
+   :widths: 16 84
 
-   * - Peer
-     - Owns
-     - Mechanisms
-     - Driver
-   * - ``zsblue_motion``
-     - Blue motion bus
-     - ADC, rotator, slit, focus
-     - ``coo-ethercat``
-   * - ``zsblue_cryo``
-     - Blue CryoTel cooler
-     - Sunpower CryoTel: setpoint, power, state
-     - ``sunpower``
+   * - Mechanism
+     - Notes
+   * - Slit
+     - 10" long, discrete selectable widths spanning roughly 0.3" to 1.0".
+       Discrete rather than continuous, so it is a selector with named
+       positions rather than a positioner with a range.
+   * - Tip/tilt
+     - Slit-plane alignment. Two axes.
+   * - Focus
+     - Pre-optics focus.
+   * - ADC
+     - A pair of counter-rotating Amici prisms. Two axes driven as a
+       coordinated pair from a dispersion solution rather than positioned
+       independently. Needs airmass and parallactic angle from
+       ``zskeck.tcs``.
+   * - K-mirror
+     - Field de-rotation, counter-rotating the diurnal sky motion to hold the
+       target fixed on the slit. Needs telescope state from ``zskeck.tcs``
+       and runs continuously during an exposure rather than being positioned
+       once.
 
-ZSpec Red
-~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 28 30 24
-
-   * - Peer
-     - Owns
-     - Mechanisms
-     - Driver
-   * - ``zsred_motion``
-     - Red motion bus
-     - ADC, rotator, slit, focus
-     - ``coo-ethercat``
-   * - ``zsred_cryo``
-     - Red CryoTel cooler
-     - Sunpower CryoTel: setpoint, power, state
-     - ``sunpower``
-
-Blue and Red are structurally identical. They should share one daemon
-implementation parameterised by configuration, not two near-duplicate
-codebases.
+The K-mirror and the ADC are the only mechanisms that track during an
+observation. Everything else is positioned during configuration and then
+held.
 
 Detectors
-~~~~~~~~~
+---------
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 28 30 24
+   :widths: 18 20 30 32
 
    * - Peer
      - Owns
-     - Responsibilities
-     - Driver
-   * - ``zscam_blue``
-     - Blue detector controller
-     - Configure, expose, abort, read out, write FITS, report temperature
-     - ``camera-interface``
-   * - ``zscam_red``
-     - Red detector controller
-     - As above
-     - ``camera-interface``
+     - Detectors
+     - Notes
+   * - ``zscam_vis``
+     - VIS Archon controller
+     - B, G, R qCCDs, 4096x2048, 15 micron
+     - Read out through an Archon, so it uses ``camera-interface``.
+       Multi-Video Processor electronics give 256 readout channels per
+       device. Frame store, so a new exposure starts while the previous
+       reads out. Readout about 2 minutes.
    * - ``zscam_nir``
-     - nIR detector controller
-     - As above, plus up-the-ramp / correlated-double-sampling readout modes
-     - ``camera-interface``: TBC
+     - NIR readout electronics
+     - YJ, H, K HgCdTe LmAPD, 2048x2048
+     - Nondestructive readout, 16 parallel channels, up-the-ramp sampling.
+   * - ``zscam_img``
+     - Imager cameras
+     - Three Hamamatsu ORCA-Quest 2 qCMOS, 4096x2304, 4.6 micron
+     - Millisecond frame times, full-frame and sub-array modes. The three
+       must be synchronised.
 
-Detector daemons are modelled separately from mechanism daemons throughout this
-architecture. Their command durations, data products, failure modes, and
-recovery behaviour differ enough that treating them as "just another daemon"
-would distort both.
+``zscam_img`` is grouped for a different reason: simultaneous tri-band
+millisecond imaging is the imager's whole purpose, and synchronising three
+cameras across three processes would make the one thing it exists to do the
+hardest thing to guarantee.
 
-.. note:: **TBC: detector controllers**
-
-   The controller type per channel (Archon, ARC/Leach, or a SIDECAR ASIC for
-   the nIR H2RG-class device) is not fixed here. Whether one daemon can serve
-   several controllers, rather than one daemon per controller, depends on that
-   choice.
-
-Calibration and lightpath
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 28 30 24
-
-   * - Peer
-     - Owns
-     - Mechanisms
-     - Driver
-   * - ``zscal_lamps``
-     - Lamp power and modulation
-     - Arc and flat lamps, modulators, lamp interlocks
-     - ``pdu``, ``srs``: TBC
-   * - ``zscal_lightpath``
-     - Lightpath selection mechanism
-     - Calibration pickoff/fold, dust covers, shutters
-     - ``coo-ethercat`` or ``thorlabs``: TBC
-
-``zscal_lightpath`` holds the interlock that makes lamp operation safe: lamps
-may only be enabled with the calibration path engaged. Because that couples two
-daemons, ``zscal_lamps`` subscribes to lightpath state and fails closed if it
-is stale or missing.
+The frame store on the qCCDs changes the exposure model. Because near-zero
+read noise makes subdivision free, a long integration is normally taken as a
+series of shorter ones and the observer watches signal-to-noise accumulate.
+The detector daemon therefore manages a series rather than a single
+exposure, and publishes progress across it.
 
 Housekeeping
-~~~~~~~~~~~~
+------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 28 30 24
+   :widths: 18 22 36 24
 
    * - Peer
      - Owns
      - Responsibilities
      - Driver
-   * - ``zshk_vacuum``
-     - Gauges and ion pumps
-     - Cryostat pressures, ion pump state and current
-     - ``inficon``, ``gammavac``
-   * - ``zshk_temp``
-     - Monitor-only Lakeshore channels
-     - Structure and bench temperatures for flexure and focus models
+   * - ``zshouse_cryo``
+     - Cryocoolers
+     - NIR cryostat and detector dewar cooling: state, power, fault
+       reporting
+     - ``cryomech`` / ``sunpower``, TBC
+   * - ``zshouse_thermal``
+     - Lakeshore chassis
+     - Detector and bench temperature control loops, heaters, and the
+       structure temperatures that feed flexure and focus models
      - ``lakeshore``
-   * - ``zshk_env``
-     - OW-SERVER 1-Wire bus
-     - Ambient temperature, humidity, dew point, pressure
-     - ``onewire``
-   * - ``zshk_power``
+   * - ``zshouse_vacuum``
+     - Gauges and pumps
+     - NIR cryostat and detector dewar pressures, ion pump state
+     - ``inficon``, ``gammavac``
+   * - ``zshouse_glycol``
+     - Facility cooling interface
+     - Glycol supply and return temperatures, flow, leak detection
+     - TBC
+   * - ``zshouse_power``
      - PDUs and UPS
      - Outlet control, power state, UPS status and battery
      - ``pdu``, ``ups`` (new)
-   * - ``zshk_watchdog``
-     - Nothing
-     - Daemon liveness supervision, systemd interface, escalation
-     - none
+   * - ``zshouse_env``
+     - 1-Wire bus
+     - Ambient temperature, humidity, dew point, pressure
+     - ``onewire``
+   * - ``zshouse_watchdog``
+     - The host service manager
+     - Daemon liveness supervision and systemd control
+     - systemd
 
-``zshk_watchdog`` owns no hardware. It subscribes to every daemon's heartbeat,
-detects silence, publishes ``offline`` on behalf of daemons that cannot report
-it themselves, and drives systemd restarts under a configured policy.
+**On the keyword side** it subscribes to every daemon's heartbeat and status,
+detects silence, and publishes ``offline`` on behalf of daemons that cannot
+report it themselves. A dead daemon cannot announce that it is dead, so
+something else has to.
+
+**On the system side** it owns the host service manager. Starting, stopping,
+and restarting a daemon are systemd operations, and the watchdog exposes them
+as keywords like any other capability:
+
+.. code-block:: text
+
+   zshouse.watchdog.daemonstates   compound: all daemons, state + heartbeat age
+   zshouse.watchdog.restart        trigger, takes a peer id
+   zshouse.watchdog.stop           trigger, takes a peer id
+   zshouse.watchdog.start          trigger, takes a peer id
+   zshouse.watchdog.servicestate   systemd unit state for one peer
+
+This makes daemon lifecycle reachable from the hard hat GUI and the CLI
+without anyone opening an ssh session to run ``systemctl``. Restarting a
+faulted daemon becomes an ordinary keyword write, logged like every other
+command. Restart policy is configuration, per daemon, and is described in
+:doc:`deployment`; the watchdog applies it and does not invent it.
 
 Because it must keep working when the rest of the system does not, it has the
-fewest dependencies of any daemon: no drivers, no configuration beyond the
-daemon list and the restart policy.
+fewest dependencies of any daemon: no instrument drivers, and no
+configuration beyond the daemon list and the restart policy.
 
 Coordination and gateway daemons
 --------------------------------
@@ -270,100 +282,110 @@ Coordination and gateway daemons
    * - Peer
      - Responsibilities
    * - ``zsseq_obs``
-     - The observation sequencer. Executes instrument workflows, holds
-       instrument-level ownership during a sequence, aggregates daemon state
-       into instrument state, and manages the target list. Owns no hardware.
+     - The observation sequencer. Executes instrument workflows, aggregates
+       daemon state into instrument state, and manages the target list. Owns
+       no hardware.
    * - ``zskeck_tcs``
-     - Gateway to the Keck 1 telescope control system. The TCS is owned and
-       operated by WMKO and lives in an EPICS domain, so this daemon is a
-       translator: it holds the EPICS Channel Access connection on one side and
-       is an ordinary ZShooter peer on the other. Republishes telescope
-       pointing, rotator angle, airmass, parallactic angle, and hour angle;
-       forwards permitted offsets.
-   * - ``zskeck_magiq``
-     - Gateway to MAGIQ, the WMKO acquisition and guiding system. Republishes
-       acquisition and guide state so the sequencer and the GUIs can see it,
-       and requests the acquisition operations ZShooter is permitted to
-       request. Scope pending the functional split below.
+     - Gateway to the Keck 1 telescope control system, which WMKO owns and
+       which lives in an EPICS domain. Republishes telescope pointing,
+       rotator angle, airmass, parallactic angle, and hour angle; forwards
+       permitted offsets.
+   * - ``zskeck_acq``
+     - Gateway to WMKO acquisition and guiding. Republishes acquisition and
+       guide state so the sequencer and the GUIs can gate on it. Scope
+       pending the split below.
 
-``zskeck_tcs`` is where the ADC and rotator solutions get their inputs. Every
-daemon that needs airmass, parallactic angle, or hour angle subscribes to
-``zskeck.tcs.*`` rather than opening its own EPICS connection. See
-:doc:`../architecture/gateways` for why translation is concentrated in one
-place.
+``zskeck_tcs`` feeds the ADC dispersion solution and the K-mirror
+de-rotation. Both track continuously during an exposure, so this gateway is
+not a configuration-time convenience: an interruption to telescope state is
+an interruption to two live control loops, and the daemons consuming it must
+treat stale telescope state as a fault rather than coast on the last value.
+
+.. note:: **TBC: K1DM3**
+
+   ZShooter is fed by the deployable tertiary K1DM3, and whether the
+   instrument receives light at all depends on its position. The ICS needs to
+   know that state, and possibly to request it, since staying online for
+   target-of-opportunity response is a design driver. Whether that arrives
+   through ``zskeck_tcs`` or warrants its own gateway depends on how WMKO
+   exposes it.
 
 Acquisition and guiding
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-**Telescope acquisition and guiding is owned by Keck, under MAGIQ.** ZShooter
-does not implement astrometric acquisition, offset computation, or guiding, and
-no daemon in this inventory does so.
+Telescope acquisition and guiding is owned by Keck, not by ZShooter. No
+daemon in this inventory performs astrometric acquisition, offset
+computation, or guiding.
 
-What ZShooter needs is an interface to MAGIQ, not a replacement for it:
-knowing whether a target is acquired and whether guiding is locked, so the
-sequencer can gate an exposure on it; surfacing that state to the observer; and
-requesting whatever acquisition operations an instrument is permitted to
-request.
+Two things complicate the interface, and both need resolving with WMKO.
 
-.. note:: **TBC: MAGIQ functional split**
+**Which Keck system.** MAGIQ is the current Keck acquisition and guiding
+system. The design manuscript instead shows the **STRATA** K1AO wavefront
+sensing and guider concept upstream of the ZShooter front-end, picking off
+part of the beam through a Na D dichroic.
 
-   The division of responsibility between ZShooter and MAGIQ must be mapped
-   explicitly and agreed with WMKO. The questions to answer, each of which
-   changes what ``zskeck_magiq`` does:
+**ZShooter's own imager sees the field.** The imager provides acquisition
+support and photometric anchoring over a 2' field, and the front-end can pass
+the central 30" to the spectrographs while the remainder continues to the
+imager. The instrument can therefore watch the field around the slit during
+an observation.
 
-   - Which acquisition steps does MAGIQ perform, and which (if any) does the
+.. note:: **TBC: acquisition functional split**
+
+   To be mapped explicitly and agreed with WMKO:
+
+   - Which acquisition steps does the Keck system perform, and which does the
      instrument initiate?
-   - What acquisition and guide state does MAGIQ publish, in what domain, and
-     how does ZShooter subscribe to it?
-   - Can the instrument request an offset, and if so within what limits and
-     under whose authority?
-   - Does ZShooter contribute anything to acquisition, such as a slit-viewing
-     or through-slit image, and if so what does MAGIQ expect of it?
-   - What does MAGIQ provide that must reach the FITS headers?
-   - What happens to a running sequence when guiding is lost?
+   - What acquisition and guide state is published, in what domain, and how
+     does ZShooter subscribe to it?
+   - Does ZShooter's imager contribute to acquisition or guiding, and if so
+     what is expected of it and at what cadence?
+   - Can the instrument request an offset, and within what limits?
+   - What does the Keck system provide that must reach the FITS headers?
+   - What happens to a running exposure when guiding is lost?
 
    Until this is mapped, the acquisition workflow in
-   :doc:`../operations/workflows` cannot be specified and the required-daemon
-   set for ``acquisition`` mode is incomplete.
+   :doc:`../operations/workflows` is a shape rather than a specification.
 
 Summary
 -------
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 20 56
+   :widths: 24 12 64
 
    * - Class
      - Count
      - Peers
-   * - Motion
-     - 5
-     - ``zsimg_motion``, ``zsimg_adc``, ``zsnir_motion``,
-       ``zsblue_motion``, ``zsred_motion``
-   * - Thermal / cryogenic
-     - 4
-     - ``zsnir_thermal``, ``zsnir_cryo``, ``zsblue_cryo``, ``zsred_cryo``
+   * - Front-end
+     - 2
+     - ``zsfe_selector``, ``zsfe_cal``
+   * - Mechanism
+     - 3
+     - ``zsimg_motion``, ``zsvis_motion``, ``zsnir_motion``
    * - Detector
      - 3
-     - ``zscam_blue``, ``zscam_red``, ``zscam_nir``
-   * - Calibration
-     - 2
-     - ``zscal_lamps``, ``zscal_lightpath``
+     - ``zscam_vis``, ``zscam_nir``, ``zscam_img``
    * - Housekeeping
-     - 5
-     - ``zshk_vacuum``, ``zshk_temp``, ``zshk_env``, ``zshk_power``,
-       ``zshk_watchdog``
+     - 7
+     - ``zshouse_cryo``, ``zshouse_thermal``, ``zshouse_vacuum``,
+       ``zshouse_glycol``, ``zshouse_power``, ``zshouse_env``,
+       ``zshouse_watchdog``
    * - Coordination
      - 1
      - ``zsseq_obs``
    * - Gateway
      - 2
-     - ``zskeck_tcs``, ``zskeck_magiq``
+     - ``zskeck_tcs``, ``zskeck_acq``
    * - **Total**
-     - **22**
+     - **18**
      -
 
-Distinct daemon *implementations* are fewer: Blue and Red motion share one,
-the two CryoTel daemons share one, and the three detector daemons share one or
-two depending on the nIR controller choice. Roughly a dozen implementations
-cover twenty-two deployed daemons.
+Distinct daemon *implementations* are fewer still. The two spectrograph
+motion daemons share one, and ``zscam_vis`` and ``zscam_nir`` may share one
+depending on how far the qCCD and LmAPD readout models diverge. Roughly a
+dozen implementations cover eighteen deployed daemons.
+
+Being fixed-format is what keeps this number down. An instrument that
+exchanged gratings, cross-dispersers, or cameras during observing would carry
+a mechanism, a daemon, and a calibration dependency for each.

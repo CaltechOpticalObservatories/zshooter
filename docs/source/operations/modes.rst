@@ -16,7 +16,7 @@ Modes are configuration, not code.
      - Characteristics
    * - ``science``
      - Nominal observing
-     - Observing limits. Sequencer holds ownership. Lamps interlocked off.
+     - Observing limits. The sequencer drives. Lamps interlocked off.
        All daemons required for the selected channels must be ``ready``.
    * - ``acquisition``
      - Target acquisition and centring
@@ -24,8 +24,9 @@ Modes are configuration, not code.
        Transitions to ``science`` on acquisition.
    * - ``calibration``
      - Arcs, flats, darks
-     - Calibration lightpath engaged. Lamps permitted. Telescope motion not
-       required. Runs during the day as well as at night.
+     - Front-end selector in a calibration position. Lamps permitted.
+       Telescope motion not required. Runs during the day as well as at
+       night.
    * - ``engineering``
      - Hard hat operation
      - Engineering limits. Direct device addressing. Announced to observers.
@@ -85,8 +86,8 @@ Required daemons per mode
 -------------------------
 
 Each mode declares in configuration which daemons must be ``ready``. This is
-what allows partial operation: a nIR channel that is warm does not prevent a
-blue-only programme.
+what allows partial operation: a NIR spectrograph that is warm does not
+prevent a VIS-only programme, and neither prevents imaging.
 
 .. list-table::
    :header-rows: 1
@@ -95,19 +96,21 @@ blue-only programme.
    * - Mode
      - Required
    * - ``science``
-     - ``zsseq_obs``, ``zskeck_tcs``, and the motion, cryogenic, and detector
-       daemons of every selected channel.
+     - ``zsseq_obs``, ``zskeck_tcs``, ``zsfe_selector``, and the motion and
+       detector daemons of every selected assembly, plus ``zshouse_cryo``,
+       ``zshouse_thermal``, and ``zshouse_vacuum`` when the NIR
+       spectrograph is in use.
    * - ``acquisition``
-     - As ``science``, plus ``zskeck_magiq``. Acquisition itself is performed
+     - As ``science``, plus ``zskeck_acq``. Acquisition itself is performed
        by MAGIQ, which ZShooter waits on rather than drives.
    * - ``calibration``
-     - ``zsseq_obs``, ``zscal_lamps``, ``zscal_lightpath``, and the motion and
-       detector daemons of every selected channel. Not ``zskeck_tcs``.
+     - ``zsseq_obs``, ``zsfe_cal``, ``zsfe_selector``, and the motion and
+       detector daemons of every selected assembly. Not ``zskeck_tcs``.
    * - ``engineering``
      - Only the daemons being worked on.
    * - ``maintenance``
-     - ``zshk_vacuum``, ``zshk_temp``, ``zshk_power``, and the relevant
-       cryogenic daemons.
+     - ``zshouse_vacuum``, ``zshouse_thermal``, ``zshouse_cryo``,
+       ``zshouse_glycol``, and ``zshouse_power``.
 
 .. note:: **TBC: observing modes**
 

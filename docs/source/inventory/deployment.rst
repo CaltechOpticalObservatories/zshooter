@@ -15,42 +15,51 @@ by what they must survive.
      - Runs
      - Constraint
    * - Motion host
-     - ``*_motion``, ``zsimg_adc``, ``zscal_lightpath``
+     - ``zsfe_selector``, ``zsimg_motion``, ``zsvis_motion``,
+       ``zsnir_motion``
      - Needs a dedicated NIC per EtherCAT bus. EtherCAT traffic cannot share
        an interface with normal networking.
    * - Detector host
-     - ``zscam_*``
-     - Needs the detector controller interface hardware (PCIe for ARC, a
-       dedicated high-throughput link for Archon) and local fast storage for
-       frames.
+     - ``zscam_vis``, ``zscam_nir``, ``zscam_img``
+     - Needs the readout interface hardware and local fast storage. The
+       heaviest constraint in the instrument: 256-channel qCCD readout and
+       millisecond full-frame qCMOS imaging are both high-bandwidth, and may
+       not share a host.
    * - Housekeeping host
-     - ``zshk_*``, ``zsnir_thermal``, ``*_cryo``, ``zscal_lamps``
-     - Must keep running when observing stops. Thermal and vacuum monitoring
-       are daytime and maintenance functions as much as night ones.
+     - ``zshouse_*``, ``zsfe_cal``
+     - Must keep running when observing stops. Thermal, vacuum, and glycol
+       monitoring are daytime and maintenance functions as much as night
+       ones.
    * - Control host
-     - ``zsseq_obs``, ``zskeck_tcs``, GUIs, VNC
-     - Needs the observatory network and the TCS.
+     - ``zsseq_obs``, ``zskeck_tcs``, ``zskeck_acq``, GUIs, VNC
+     - Needs the observatory network and the WMKO EPICS domain.
 
 .. note:: **TBC: host allocation**
 
    This grouping is by constraint, not by a decided machine count. The actual
-   allocation depends on the EtherCAT bus topology and the detector controller
-   choice.
+   allocation depends on the EtherCAT bus topology and on the detector
+   readout electronics, neither of which is designed yet.
+
+   Detector data rates are the thing most likely to force more hosts. Three
+   qCMOS cameras at millisecond cadence and three qCCDs reading 256 channels
+   apiece are unlikely to share one machine comfortably, and the imager and
+   the spectrographs can run independently of each other in any case.
 
 Startup
 -------
 
 All daemons start automatically at boot under systemd, with units in
-``init.d/``. Ordering is by dependency, not by convenience:
+``init.d/``:
 
 1. **Infrastructure**: message transport (broker, if RabbitMQ is chosen).
-2. **Housekeeping**: ``zshk_power`` first, since other daemons may need their
-   hardware powered; then ``zshk_vacuum``, ``zshk_temp``, ``zshk_env``.
+2. **Housekeeping**: ``zshouse_power`` first, since other daemons may need
+   their hardware powered; then ``zshouse_vacuum``, ``zshouse_thermal``,
+   ``zshouse_glycol``, and ``zshouse_env``.
 3. **Thermal and cryogenic**: cooling should be under control before anything
    else is attempted, and long before a detector is expected to be cold.
 4. **Device daemons**: motion, calibration, detectors.
 5. **Coordination**: ``zskeck_tcs``, then ``zsseq_obs``.
-6. **Watchdog**: ``zshk_watchdog`` last, so it does not report expected
+6. **Watchdog**: ``zshouse_watchdog`` last, so it does not report expected
    absences during a normal boot.
 7. **Interfaces**: VNC sessions and GUIs.
 

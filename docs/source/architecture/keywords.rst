@@ -24,11 +24,15 @@ The Libby peer identity is ``<group>_<scope>``; the keyword address is
 
 .. code-block:: text
 
-   zsblue.motion.slitwidth
-   zsblue.motion.focusposition
-   zsnir.thermal.detectortemperature
-   zshk.vacuum.dewarpressure
-   zscal.lamps.arclampstate
+   zsvis.motion.slitwidth
+   zsvis.motion.kmirrorangle
+   zsvis.motion.adcangle
+   zsnir.motion.focusposition
+   zsfe.selector.position
+   zsfe.cal.arclampstate
+   zscam.vis.exposurestate
+   zshouse.thermal.detectortemperature
+   zshouse.vacuum.dewarpressure
    zsseq.obs.sequencestate
 
 Naming rules
@@ -36,10 +40,10 @@ Naming rules
 
 - Lowercase throughout. No underscores inside a name segment: Libby's ``%``
   wildcard matches within a segment, and consistent unbroken names make
-  wildcard queries predictable (``libby show zsblue.motion.is%``).
+  wildcard queries predictable (``libby show zsvis.motion.is%``).
 - Groups are the subsystem prefixes fixed in :doc:`../inventory/daemons`:
-  ``zsimg``, ``zsnir``, ``zsblue``, ``zsred``, ``zscal``, ``zscam``, ``zshk``,
-  ``zskeck``, ``zsseq``.
+  ``zsfe``, ``zsimg``, ``zsvis``, ``zsnir``, ``zscam``, ``zshouse``, ``zskeck``,
+  ``zsseq``.
 - Names are stable. A keyword name is an interface; renaming one breaks the
   GUI, the sequencer, scripts, and the night log.
 - Names carry no routing information. ``group`` and ``scope`` already say where
@@ -130,9 +134,6 @@ special-casing.
    * - ``lastresult``
      - string
      - Outcome of the most recent command.
-   * - ``owner``
-     - string
-     - Current command authority holder (see :doc:`authority`).
    * - ``halt``
      - trigger
      - Stop activity and hold safely. Always accepted, in every state.

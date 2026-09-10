@@ -10,6 +10,29 @@ telescope.
 That is what makes the test suite worth trusting: it is not exercising a
 parallel implementation.
 
+Where simulation lives
+----------------------
+
+At the **driver** boundary. Each driver ships a simulated implementation of
+the same API; the daemon selects between them by configuration.
+
+.. mermaid::
+
+   flowchart LR
+       D["Device daemon<br/>(identical in both cases)"] --> I{"driver.simulate"}
+       I -- false --> R["Real driver"] --> H["Hardware"]
+       I -- true --> S["Simulated driver"] --> M["Device model"]
+
+This places the seam as low as possible, so that everything above it (command
+validation, state machines, limits, interlocks, keyword serving, publication,
+and logging) is the same code in both cases. A simulation seam higher in the
+stack would leave the most safety-critical logic untested. Recorded as
+ADR-0006 in :doc:`../decisions/index`.
+
+A simulated daemon is indistinguishable from a real one to every client: the
+same keywords, the same state machines, the same validation and interlocks,
+realistic timing, and realistic failures.
+
 Test levels
 -----------
 
@@ -30,12 +53,12 @@ Levels are selected with pytest markers. Unit tests carry no marker.
      - Yes
    * - Daemon
      - One daemon against its simulated driver: keyword surface, state
-       machine, limit enforcement, authority, fault and recovery
+       machine, limit enforcement, fault and recovery
      - ``daemon``
      - Yes
    * - Integration
      - Several daemons plus the sequencer, all simulated: workflows,
-       interlocks, ownership, abort paths
+       interlocks, cancellation, abort paths
      - ``integration``
      - Yes
    * - Interface
@@ -58,7 +81,7 @@ Running the tests
    $ pytest -m daemon                # one level
    $ pytest -m "daemon or integration"
    $ pytest --cov                    # with coverage
-   $ pytest tests/daemons/test_zsblue_motion.py -v
+   $ pytest tests/daemons/test_zsvis_motion.py -v
 
 Hardware tests are **deselected by default** through ``addopts`` in
 ``pyproject.toml``. Running them requires asking:
@@ -85,13 +108,13 @@ bypasses the keyword interface is not testing the thing clients depend on.
 .. code-block:: python
 
    @pytest.mark.daemon
-   def test_rejects_move_outside_soft_limits(zsblue_motion):
-       result = zsblue_motion.modify("slitwidth", 11.0)   # softmax is 10.0
+   def test_rejects_move_outside_soft_limits(zsvis_motion):
+       result = zsvis_motion.modify("slitwidth", 11.0)   # softmax is 10.0
 
        assert not result.ok
        assert result.state == "rejected"          # not "failed"
        assert "limit" in result.reason.lower()
-       assert zsblue_motion.show("slitwidth") == pytest.approx(1.0)  # unmoved
+       assert zsvis_motion.show("slitwidth") == pytest.approx(1.0)  # unmoved
 
 Three things that assertion set is checking, all of which matter operationally:
 
@@ -132,7 +155,7 @@ each has a test asserting the instrument responds correctly:
    * - Interlock threshold excursion
      - Dependent commands rejected; the interlock names the unmet condition.
    * - Stale interlock dependency
-     - Fails **closed**. A daemon that stops hearing about the lightpath must
+     - Fails **closed**. A daemon that stops hearing about the front-end selector
        not enable lamps.
 
 The last one is the most important test in the suite and the easiest to forget:
@@ -172,3 +195,28 @@ The meaningful coverage question for this system is not "what fraction of lines
 ran" but "does every safety rule in :doc:`../architecture/safety` have a test
 that asserts it is enforced". That is tracked by requirement traceability,
 not by the coverage tool.
+
+First vertical slice
+--------------------
+
+Before generating scaffolding for the full inventory, the architecture should
+be validated on one thin slice end to end:
+
+.. code-block:: text
+
+   CLI + minimal GUI
+     -> Libby transport
+     -> one motion daemon (simulated coo-ethercat driver)
+     -> keyword surface with limits and validation
+     -> published status and telemetry
+     -> command log
+
+This exercises the envelope, the keyword conventions, the daemon base class,
+the configuration schema and its defaults, the state machines, and the logging
+contract: every architectural decision in these documents, at a scale where
+getting one wrong is cheap to fix.
+
+Following the COO ICS specification's recommendation, the second slice should
+be a **detector** daemon, because detector daemons stress the parts a
+mechanism daemon does not: long-running commands, progress reporting, large
+data products, and cancellation.

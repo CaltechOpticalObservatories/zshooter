@@ -100,8 +100,8 @@ a separate framework:
 .. code-block:: console
 
    $ pytest -m hardware                              # everything, on the bench
-   $ pytest -m hardware tests/hardware/test_zsblue_motion.py
-   $ pytest -m hardware --junit-xml=results/zsblue-v1.2.0rc1.xml
+   $ pytest -m hardware tests/hardware/test_zsvis_motion.py
+   $ pytest -m hardware --junit-xml=results/zsvis-v1.2.0rc1.xml
 
 Results are recorded against the software version under test. A subsystem
 qualified against ``v1.2.0rc1`` is not qualified against ``v1.3.0``, and
@@ -141,8 +141,8 @@ Scripts
 
 Scripts drive the instrument through the same keyword interface as everything
 else, using the ``libby`` CLI or the Python client. They get no privileged
-access and are subject to the same authority model, which means a script that
-works on the bench works at the summit.
+access and pass the same validation as any other client, which means a script
+that works on the bench works at the summit.
 
 They live in the repository under version control. A bring-up procedure that
 exists only in someone's home directory is lost the day they are on leave.
@@ -217,22 +217,21 @@ Purpose-built panels are expected to be temporary. Ones that survive into
 operations should be reviewed for inclusion in the hard hat GUI rather than
 maintained separately.
 
-Authority during AIT
---------------------
+Working safely during AIT
+-------------------------
 
-AIT runs in engineering mode, under the authority model in
-:doc:`../architecture/authority`. Two things follow, and both matter more
-during AIT than at any other time:
+AIT runs in the engineering mode described in :doc:`../operations/modes`. Two
+things follow, and both matter more during AIT than at any other time:
 
 **Safety still applies.** Hard limits, interlocks, and fault-state refusals are
 enforced identically. Engineering limits are a wider *configured* envelope, not
 the absence of one. AIT is when mechanisms are least understood and most
 easily damaged, which is the worst possible time to have a bypass available.
 
-**Everything is logged.** Every AIT command is recorded with the engineer's
-identity, the same as any other command. The AIT command log is instrument
-documentation: when a mechanism behaves oddly in year three, the record of what
-it did in year one is the fastest route to understanding it.
+**Everything is logged.** Every AIT command is recorded the same as any other.
+The AIT command log is instrument documentation: when a mechanism behaves
+oddly in year three, the record of what it did in year one is the fastest
+route to understanding it.
 
 Simulation stays in step
 ------------------------

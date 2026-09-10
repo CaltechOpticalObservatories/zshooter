@@ -23,7 +23,7 @@ method by which that is verified.
    * - ``L2-xxx``
      - L2
      - *requirement text*
-     - ``zsblue_motion``, ``zsblue.motion.slitwidth``
+     - ``zsvis_motion``, ``zsvis.motion.slitwidth``
      - Test (sim)
      - Open
 
@@ -47,20 +47,20 @@ is not quoted from the baseline.
      - Verification
    * - Mechanism
      - "The instrument shall provide a selectable slit width over *range*."
-     - ``zsblue_motion``; keyword ``zsblue.motion.slitwidth`` with configured
+     - ``zsvis_motion``; keyword ``zsvis.motion.slitwidth`` with configured
        soft limits and named positions
      - Test (sim) for range and limit enforcement; Test (hardware) for
        accuracy
    * - Measurement
      - "Detector temperature shall be recorded throughout operation."
-     - ``zsnir_thermal``; keyword ``zsnir.thermal.detectortemperature``;
+     - ``zshouse_thermal``; keyword ``zshouse.thermal.detectortemperature``;
        telemetry at 0.1 Hz; FITS header entry
      - Inspection of telemetry configuration; Test (sim) for publication
    * - Safety
      - "Calibration lamps shall not illuminate the telescope beam."
-     - Lamp interlock in ``zscal_lamps`` conditioned on
-       ``zscal.lightpath.state``, failing closed on stale state
-     - Test (sim) with fault injection on the lightpath dependency
+     - Lamp interlock in ``zsfe_cal`` conditioned on
+       ``zsfe.selector.state``, failing closed on stale state
+     - Test (sim) with fault injection on the selector dependency
    * - Operation
      - "The instrument shall be configurable for a target without operator
        intervention."

@@ -16,21 +16,23 @@ hardware. The order matters: cheaper and more absolute checks come first.
    flowchart TB
        A["Command received"] --> B{"Daemon faulted?"}
        B -- yes --> R1["reject: fault active"]
-       B -- no --> C{"Requester has authority?"}
-       C -- no --> R2["reject: insufficient authority"]
-       C -- yes --> D{"Device owned by another?"}
-       D -- yes --> R3["reject: owned by ..."]
-       D -- no --> E{"Type / validator OK?"}
-       E -- no --> R4["reject: invalid value"]
-       E -- yes --> F{"Within active limits?"}
-       F -- no --> R5["reject: out of limits"]
-       F -- yes --> G{"Preconditions met?"}
-       G -- no --> R6["reject: precondition failed"]
-       G -- yes --> H{"Interlocks clear?"}
-       H -- no --> R7["reject: interlock"]
-       H -- yes --> I["ACK, execute"]
+       B -- no --> C{"Type / validator OK?"}
+       C -- no --> R2["reject: invalid value"]
+       C -- yes --> D{"Within active limits?"}
+       D -- no --> R3["reject: out of limits"]
+       D -- yes --> E{"Daemon state permits it?"}
+       E -- no --> R4["reject: busy or not ready"]
+       E -- yes --> F{"Interlocks clear?"}
+       F -- no --> R5["reject: interlock"]
+       F -- yes --> G["execute"]
 
-``halt`` and ``safe`` skip the chain entirely. They are always accepted.
+``halt`` and ``safe`` skip the chain entirely. They are always accepted, in
+every state, from every client.
+
+The chain is about the *hardware*, not about the person. The daemon does not
+ask who is calling; anyone who can reach the bus can command it, and the
+expectation is that whoever does knows what the keyword means. What the daemon
+does insist on is that the command itself is safe for the device right now.
 
 Limits
 ------
@@ -68,24 +70,38 @@ Candidate ZShooter interlocks:
 
 .. list-table::
    :header-rows: 1
-   :widths: 32 68
+   :widths: 30 70
 
    * - Interlock
      - Rule
-   * - Calibration lamps
-     - Lamps may not be enabled unless the instrument is in calibration mode
-       and the calibration lightpath is engaged. Prevents illuminating the
-       telescope beam.
+   * - Calibration sources
+     - Lamps and continuum sources may not be enabled unless the instrument
+       is in calibration mode and the front-end selector is in a calibration
+       position. Prevents illuminating the telescope beam.
+   * - Front-end routing
+     - Selector moves are inhibited while any detector is exposing. Moving
+       the beam mid-exposure spoils the frame on every channel at once.
    * - Detector exposure
      - Exposure commands are rejected unless detector configuration is
-       complete and the detector is at its operating temperature.
+       complete and the focal plane is at its operating temperature.
    * - Cryostat vacuum
      - Cooling is inhibited above a configured pressure threshold. Cooling a
        poor vacuum damages the cryostat.
+   * - Cryogenic motion
+     - NIR pre-optics mechanisms are inhibited above a configured
+       temperature. Warm mechanisms in a cold design have different
+       clearances, and moving them during cooldown or warm-up risks binding.
    * - Motion during readout
-     - Mechanisms in the active lightpath are held during detector readout.
-   * - Dust covers
-     - Motion of covered mechanisms is inhibited while a cover is closed.
+     - Mechanisms in the active light path are held during detector readout.
+   * - Tracking mechanisms
+     - The K-mirror and ADC are refused a new tracking solution when
+       telescope state from ``zskeck.tcs`` is stale. Both track continuously,
+       and extrapolating from a stale airmass drives them somewhere wrong
+       rather than leaving them where they were.
+   * - Glycol
+     - Detector and cryocooler operation is inhibited on loss of facility
+       glycol flow, and the condition is alerted well before it becomes a
+       thermal problem.
    * - Warm-up
      - Detector power-down is required before a controlled warm-up.
 
@@ -116,7 +132,8 @@ single ``safe`` trigger, including from fault state.
      - Abort the exposure, close the shutter, hold detector temperature
        control. Preserve any partial frame that can be preserved.
    * - Calibration daemons
-     - Extinguish all lamps, disengage the calibration lightpath.
+     - Extinguish all lamps and continuum sources. Leave the front-end
+       selector where it is; moving the beam is not a safe default.
    * - Thermal and cryogenic daemons
      - Hold the current setpoint. Never abandon temperature control; a cryostat
        left uncontrolled is less safe than one held.
