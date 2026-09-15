@@ -21,7 +21,7 @@ Start of night
        C -- yes --> E["Verify cryostat temps + vacuum in range"]
        E --> F["Verify detectors at operating temperature"]
        F --> G["Reference mechanisms not already referenced"]
-       G --> H["Confirm calibration lightpath disengaged"]
+       G --> H["Confirm calibration sources off"]
        H --> I["Establish TCS communication"]
        I --> J["Publish instrument ready"]
 
@@ -63,7 +63,7 @@ acquire or guide; it waits on MAGIQ and gates the exposure on the result.
    flowchart TB
        A["Instrument configured for target"] --> B["Telescope pointed<br/>(WMKO)"]
        B --> C["MAGIQ acquires and locks guiding<br/>(WMKO)"]
-       C --> D["zskeck_magiq publishes<br/>acquired + guiding state"]
+       C --> D["zskeck_acq publishes<br/>acquired + guiding state"]
        D --> E{"Acquired and guiding?"}
        E -- no --> F["Hold. Surface MAGIQ state<br/>to the observer"]
        F --> D
@@ -98,11 +98,11 @@ Science exposure
        participant T as zskeck_tcs
 
        S->>S: verify all required daemons ready
-       S->>M: hold mechanisms in lightpath
+       S->>M: hold mechanisms in light path
        S->>C: configure exposure
-       C-->>S: ACK configured
+       C-->>S: RESP configured
        S->>C: expose
-       C-->>S: ACK, exposure started
+       C-->>S: PUB exposure started
        C-->>S: PUB progress (1 Hz)
        S->>T: record telescope state for header
        C-->>S: PUB readout started
@@ -115,31 +115,39 @@ calls for simultaneity, and each channel reports independently. One channel
 failing does not silently abandon the others; the sequencer decides based on
 configured policy whether to continue with the remainder.
 
-Nodded nIR observation
-----------------------
+Subdivided exposure series
+--------------------------
 
-The nIR channel nods between exposures for sky subtraction. The nod mechanism
-is on the nIR motion bus but is commanded inside the exposure loop rather than
-during configuration, which makes it the one mechanism whose timing is coupled
-to detector readout.
+Near-zero read noise changes how an integration is taken. Because
+subdividing costs nothing, a long integration is normally a series of shorter
+exposures rather than one long one, and the qCCD frame store means the next
+exposure starts while the previous one reads out.
 
 .. mermaid::
 
    flowchart TB
-       A["Configure nIR channel"] --> B["Move to nod position A"]
-       B --> C["Expose at A"]
-       C --> D["Wait for readout complete"]
-       D --> E["Move to nod position B"]
-       E --> F["Expose at B"]
-       F --> G["Wait for readout complete"]
-       G --> H{"Nod cycles remaining?"}
-       H -- yes --> B
-       H -- no --> I["Return to nominal position"]
+       A["Configure spectrograph"] --> B["Start exposure series"]
+       B --> C["Expose sub-integration"]
+       C --> D["Shift to frame store,<br/>start next sub-integration"]
+       D --> E["Read out previous frame<br/>(concurrent)"]
+       E --> F["Publish accumulated S/N"]
+       F --> G{"Series complete?"}
+       G -- yes --> H["Close out series"]
+       G -- no --> C
 
-The nod move must not begin until readout completes. This is enforced by the
-motion-during-readout interlock in :doc:`../architecture/safety`, not by the
-sequencer alone. The sequencer getting the ordering right is expected, and the
-interlock is what makes it safe when it does not.
+This is worth doing rather than a single long exposure because it lets the
+observer watch signal-to-noise build and stop when it is sufficient, avoiding
+both under- and over-exposure, and because it gives the pipeline multiple
+frames for cosmic-ray rejection and outlier pixel identification without
+losing signal.
+
+Two consequences for the ICS. The detector daemon owns the *series*, not the
+individual exposure, so progress, abort, and the final data product are all
+series-scoped. And accumulated signal-to-noise is published during the
+series, because an observer deciding when to stop needs to see it.
+
+Sky subtraction uses the 10" slit, which provides contemporaneous sky samples
+alongside the target. There is no nod mechanism and no nodding workflow.
 
 Calibration sequence
 --------------------
@@ -147,8 +155,8 @@ Calibration sequence
 .. mermaid::
 
    flowchart TB
-       A["Enter calibration mode"] --> B["Engage calibration lightpath"]
-       B --> C{"Lightpath confirmed?"}
+       A["Enter calibration mode"] --> B["Select calibration path"]
+       B --> C{"Selector confirmed?"}
        C -- no --> R["Abort: lamps stay off"]
        C -- yes --> D["Configure channels for cal type"]
        D --> E["Enable lamp, set modulation"]
@@ -157,12 +165,12 @@ Calibration sequence
        G --> H["Extinguish lamp"]
        H --> I{"More cal frames?"}
        I -- yes --> D
-       I -- no --> J["Disengage lightpath"]
+       I -- no --> J["Restore selector to sky"]
        J --> K["Exit calibration mode"]
 
-The lightpath confirmation at step C is not a convenience check. Enabling a
+The selector confirmation at step C is not a convenience check. Enabling a
 lamp with the calibration path disengaged illuminates the telescope beam, and
-this is the interlock that prevents it. It is enforced in ``zscal_lamps``, not
+this is the interlock that prevents it. It is enforced in ``zsfe_cal``, not
 here; this workflow merely avoids provoking a rejection it knows would come.
 
 Lamps are extinguished after every frame rather than left on across a set.
@@ -184,7 +192,7 @@ conflating them is how instruments get damaged.
    * - ``halt``
      - One daemon
      - Stop that daemon's activity immediately and hold. Always accepted, in
-       any state, from any commanding role.
+       any state, from any client.
    * - Stop sequence
      - The sequence
      - Finish the current step if finishing is safe, then stop. Preserves the

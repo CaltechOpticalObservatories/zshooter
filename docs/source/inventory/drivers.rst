@@ -38,35 +38,35 @@ Existing drivers
    * - ``coo-ethercat``
      - Maxon EPOS4 motion controllers on an EtherCAT bus
      - EtherCAT (``pysoem`` soft master, dedicated NIC)
-     - all ``*_motion`` daemons, ``zscal_lightpath``
+     - all ``*_motion`` daemons, ``zsfe_selector``
    * - ``lakeshore``
      - Lakeshore 224 / 336 temperature controllers
      - Ethernet, ASCII
-     - ``zsnir_thermal``, ``zshk_temp``
+     - ``zshouse_thermal``
    * - ``sunpower``
      - Sunpower CryoTel cryocoolers
      - Serial
-     - ``zsblue_cryo``, ``zsred_cryo``
+     - ``zshouse_cryo`` (detector dewars)
    * - ``inficon``
      - Inficon vacuum gauges
      - Serial / terminal server
-     - ``zshk_vacuum``
+     - ``zshouse_vacuum``
    * - ``gammavac``
      - Gamma Vacuum SPCe ion pump controllers
      - Serial over terminal server
-     - ``zshk_vacuum``
+     - ``zshouse_vacuum``
    * - ``pdu``
      - Eaton EMAT-08 / EMAT-10 power distribution units
      - TCP ASCII, CRLF framed
-     - ``zshk_power``, ``zscal_lamps``
+     - ``zshouse_power``, ``zsfe_cal``
    * - ``onewire``
      - EDS OW-SERVER environmental sensors
      - HTTP, async
-     - ``zshk_env``
+     - ``zshouse_env``
    * - ``newport``
      - Newport motion controllers
      - Ethernet / serial
-     - ``zsimg_adc`` (if not EtherCAT)
+     - any mechanism not on EtherCAT
    * - ``pi``
      - Physik Instrumente stages and piezo controllers
      - Ethernet / serial (PIPython)
@@ -74,15 +74,16 @@ Existing drivers
    * - ``thorlabs``
      - Thorlabs stages, flippers, filter wheels
      - USB / serial
-     - ``zscal_lightpath`` covers and flippers
+     - ``zsfe_selector`` and ``zsimg_motion``, if any axis is Thorlabs
    * - ``srs``
      - Stanford Research Systems instruments
      - Serial / GPIB
-     - ``zscal_lamps`` modulation, if required
+     - ``zsfe_cal`` modulation, if required
    * - ``camera-interface``
-     - Archon and ARC/Leach detector controllers
+     - Archon and ARC/Leach detector controllers, including the VIS qCCDs
      - Vendor API (C++, with ARC PCIe driver)
-     - all ``zscam_*`` daemons
+     - ``zscam_vis``. qCCD support is being added to ``camera-interface``
+       because the qCCD is read out through an Archon controller.
 
 Also available from the COO driver set and not currently mapped to a ZShooter
 need: ``standa``, ``xeryon``, ``ozoptics``, ``hispec-fiber-switcher``.
@@ -105,6 +106,20 @@ Drivers to be written
      - Networked UPS
      - Almost certainly SNMP. Model not yet selected; the driver is thin and
        can wait for the hardware decision.
+   * - ``lmapd``
+     - Leonardo HgCdTe LmAPD arrays (Ike Pono / IBEX)
+     - Nondestructive readout over 16 parallel channels, up-the-ramp
+       sampling. Larger 2048 arrays announced for 2027, so the specific
+       device is not yet fixed.
+   * - ``qcmos``
+     - Hamamatsu ORCA-Quest 2 qCMOS imager cameras
+     - Vendor SDK. Needs full-frame and millisecond sub-array modes and
+       hardware synchronisation across three cameras. A successor device is
+       expected during the design phase and final selection follows its
+       characterisation.
+   * - ``glycol``
+     - Facility glycol cooling interface
+     - Protocol unknown; depends on what WMKO exposes at the platform.
    * - ``epics``
      - Keck 1 TCS and other WMKO EPICS services
      - EPICS Channel Access client. The Keck 1 TCS is owned and operated by
@@ -126,7 +141,7 @@ Selection rules
   ZShooter has a design error.
 - **Every driver simulates.** A simulation implementation of the same API is
   part of the driver, not an afterthought in the daemon. See
-  :doc:`../operations/simulation`.
+  :doc:`../development/testing`.
 - **Drivers are submodules.** Shared drivers are consumed as git submodules
   under ``src/zshooter/driver/``, pinned to a reviewed revision, following
   HISPEC's arrangement.

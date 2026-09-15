@@ -6,7 +6,8 @@ operated, and messaged by W. M. Keck Observatory, in messaging domains that are
 not ZShooter's.
 
 The Keck 1 telescope control system is one: WMKO owns it and it lives in an
-EPICS domain. Acquisition and guiding is another: WMKO owns it under MAGIQ.
+EPICS domain. Acquisition and guiding is another: WMKO owns it, under
+MAGIQ today and possibly under the STRATA K1AO guider by first light.
 Neither speaks the ZShooter message envelope, and neither should be asked to.
 
 A **domain gateway** is a daemon whose job is translation between an external
@@ -17,12 +18,12 @@ messaging domain and the ZShooter bus.
    flowchart LR
        subgraph WMKO["WMKO domain (owned by Keck)"]
            TCS["Keck 1 TCS<br/>EPICS"]
-           MAGIQ["MAGIQ<br/>acquisition + guiding"]
+           ACQ["MAGIQ / STRATA<br/>acquisition + guiding"]
        end
 
        subgraph GW["Gateways"]
            GTCS["zskeck_tcs"]
-           GMAG["zskeck_magiq"]
+           GMAG["zskeck_acq"]
        end
 
        subgraph ZS["ZShooter domain"]
@@ -32,7 +33,7 @@ messaging domain and the ZShooter bus.
        end
 
        TCS <-->|"EPICS Channel Access"| GTCS
-       MAGIQ <-->|"TBC"| GMAG
+       ACQ <-->|"TBC"| GMAG
        GTCS <-->|"ZShooter envelope"| SEQ
        GMAG <-->|"ZShooter envelope"| SEQ
        GTCS -.->|"PUB telescope state"| DEV
@@ -83,11 +84,11 @@ validates commands, publishes status, and defines a safe state.
        ZShooter keywords, with ZShooter units and naming conventions.
    * - **Translate outward**
      - Accept ZShooter commands and issue the corresponding external
-       operation, within whatever authority the instrument actually holds.
-   * - **Enforce the authority boundary**
-     - Reject commands ZShooter is not permitted to make. The gateway is where
-       "the instrument may request a small offset but may not slew the
-       telescope" is enforced.
+       operation.
+   * - **Enforce what WMKO permits**
+     - Reject commands ZShooter is not permitted to make of the external
+       system. The gateway is where "the instrument may request a small
+       offset but may not slew the telescope" is enforced.
    * - **Report connection health**
      - Publish whether the external domain is reachable and when its state was
        last updated, distinctly from the values themselves.
@@ -131,8 +132,8 @@ Current gateways
      - Keck 1 TCS (EPICS)
      - Telescope pointing, rotator angle, airmass, parallactic angle, hour
        angle. Forwards permitted offsets.
-   * - ``zskeck_magiq``
-     - MAGIQ (WMKO)
+   * - ``zskeck_acq``
+     - MAGIQ / STRATA (WMKO)
      - Acquisition and guiding state. Scope TBC, see
        :doc:`../inventory/daemons`.
 

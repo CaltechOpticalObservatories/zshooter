@@ -14,11 +14,14 @@ Command lifecycle
        [*] --> requested
        requested --> rejected: validation failed
        requested --> accepted: validation passed
+       requested --> cancelled: cancelled before adjudication
        accepted --> running
+       accepted --> cancelled: cancelled before execution
        running --> completed
        running --> failed
        running --> cancelling: halt / abort
-       cancelling --> cancelled
+       cancelling --> cancelled: stopped cleanly
+       cancelling --> failed: cancel did not succeed
        completed --> [*]
        failed --> [*]
        rejected --> [*]
@@ -33,27 +36,55 @@ Command lifecycle
    * - ``requested``
      - Sent by a client; not yet adjudicated.
    * - ``accepted``
-     - The daemon validated the command and has taken responsibility for it.
-       Reported as ``ACK``.
+     - Validated, and the daemon has taken responsibility for it. Not yet
+       touching hardware.
    * - ``rejected``
-     - Refused before execution: out of limits, wrong state, insufficient
-       authority, or an active fault. Nothing was done to the hardware.
+     - Refused before execution: out of limits, wrong state, blocked by an
+       interlock, or an active fault. Nothing was done to the hardware.
    * - ``running``
-     - Executing. The command owns its device until it leaves this state.
+     - Executing.
    * - ``completed``
      - Finished successfully.
    * - ``failed``
-     - Accepted, started, and did not finish successfully.
+     - Started and did not finish successfully.
    * - ``cancelling``
-     - A ``halt`` or ``abort`` is being processed.
+     - A ``halt`` or ``abort`` is being processed against running hardware.
    * - ``cancelled``
      - Terminated before normal completion at a client's request.
 
-The distinction between ``rejected`` and ``failed`` matters operationally. A
-rejection means the instrument is untouched and the client should fix its
+Cancelling before execution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A command can be cancelled at any point, not only once it is running. A
+command that has not yet reached the hardware goes straight to ``cancelled``:
+there is nothing to stop and nothing to undo, so the transient ``cancelling``
+state would be dishonest.
+
+``cancelling`` exists only for the case where hardware is already in motion
+and has to be brought to rest, which takes time and can be reported on.
+
+Cancelling can fail
+~~~~~~~~~~~~~~~~~~~
+
+A cancellation is a request to the hardware, and hardware can refuse it. A
+stage that will not stop, a controller that does not answer, a shutter that
+jams part-way: in each case the cancel itself has failed, and the command ends
+in ``failed`` rather than ``cancelled``.
+
+The distinction is not pedantic. ``cancelled`` means the instrument is in a
+known state that somebody chose. ``failed`` out of ``cancelling`` means the
+mechanism is somewhere nobody chose and needs looking at before it is used
+again. A client that treats a failed cancel as a successful one will carry on
+against hardware that is not where it thinks.
+
+Rejected is not failed
+~~~~~~~~~~~~~~~~~~~~~~
+
+A rejection means the instrument is untouched and the client should fix its
 request. A failure means the hardware may be in an indeterminate state and
 needs inspection. Clients must be able to tell these apart without parsing
-error text.
+error text, which is what the error ``category`` in :doc:`observability`
+provides.
 
 Every transition is published under the command's ``transid`` and written to
 the command log described in :doc:`observability`.
@@ -141,6 +172,7 @@ separately owned, and no daemon takes instruction from it.
    * - ``safe``
      - The instrument has been commanded to its safe state.
 
-"Required" is per observing mode: the nIR channel being offline does not stop
-a blue-only observation. The required-daemon set for each mode is configuration,
-not code. See :doc:`../operations/modes`.
+"Required" is per observing mode: the NIR spectrograph being offline does
+not stop a VIS-only observation, and neither prevents imaging. The
+required-daemon set for each mode is configuration, not code. See
+:doc:`../operations/modes`.

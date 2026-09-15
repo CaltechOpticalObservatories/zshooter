@@ -16,8 +16,10 @@ reasoning lives. An earlier draft of the architecture implied one daemon per
 mechanism (~30); HISPEC uses roughly one per subsystem (~10).
 
 **Decision.** One daemon per hardware ownership boundary: per controller or
-fieldbus, owning every mechanism attached to it. This yields ~21 daemons from
-~12 implementations.
+fieldbus, owning every mechanism attached to it, and following the
+instrument's four-assembly split. Against the SPIE 2026 design this yields 18
+daemons from roughly a dozen implementations, covering 33 motion axes and 11
+detector systems.
 
 **Rationale.** Mechanisms sharing an EtherCAT bus or a Lakeshore chassis cannot
 be owned by separate processes without a bus arbiter, which is a daemon by
@@ -71,29 +73,48 @@ and the address-book burden that ZeroMQ imposes while Libby's discovery
 requires manual key learning. ZeroMQ for bench and single-host work.
 
 **Decision needed by.** Completion of the first vertical slice
-(:doc:`../operations/simulation`), which should be built against both to
+(:doc:`../development/testing`), which should be built against both to
 confirm the abstraction genuinely holds.
 
-ADR-0004: Peer identity and authentication
---------------------------------------------
+ADR-0004: No command authority model
+------------------------------------
 
-**Status:** Open
+**Status:** Accepted. Supersedes an earlier open question about peer identity
+and authentication.
 
-**Context.** The authority model in :doc:`../architecture/authority` resolves a
-role from a peer identity. How identities are established and trusted is not
-decided.
+**Context.** An earlier draft carried a role-based authority model: clients
+were classified as observer, sequencer, engineer, admin, or read-only, daemons
+resolved a role from the requesting peer, and commands outside a role were
+rejected. It also introduced device ownership, so that a running command or
+sequence excluded other clients.
 
-**Options.** A static configured address book mapping peer IDs to roles:
-simple, adequate for a closed summit network, and offering no protection
-against a misconfigured or malicious client on that network. Or per-client
-credentials: stronger, and more to operate.
+**Decision.** Remove both. Daemons do not ask who is calling. Any client that
+can reach the bus can command any keyword, and whoever does so is expected to
+know what that keyword does.
 
-**Considerations.** The answer depends more on remote observing than on summit
-operation, and remote observing is the norm at Keck rather than the exception.
-If clients command the instrument from Waimea or from a mainland remote site,
-the static address-book answer is insufficient on its own. WMKO's own network
-and access controls carry part of this; what they carry and what the ICS must
-carry needs to be established rather than assumed.
+**Rationale.** The model was solving a problem ZShooter does not have. The
+people who reach the instrument bus are observers, support astronomers,
+observing assistants, and instrument engineers on a closed observatory
+network, and what each of them may sensibly do is already bounded by what they
+know. A role table encoded that knowledge as configuration, where it would go
+stale, and made every daemon carry identity resolution in order to enforce it.
+
+It also bought less safety than it appeared to. Safety comes from the daemon
+refusing unsafe commands, which it does regardless of who asked. Authority
+only ever governed who was allowed to make a request that was safe anyway.
+
+**Consequences.** The validation chain in :doc:`../architecture/safety` loses
+two of its seven checks and is about the hardware alone. The ``owner`` keyword
+is gone. Concurrency is handled by daemon state: a ``busy`` daemon rejects a
+second command with a ``state`` error, which is the honest reason. Engineering
+work is governed by the engineering *mode* in :doc:`../operations/modes`,
+which remains explicit and announced, because its purpose is to tell observers
+what is happening rather than to withhold permission.
+
+Nothing here protects the instrument from a client on the observatory network
+that behaves badly. That is accepted: it is a network-boundary problem rather
+than one an instrument daemon can solve, and WMKO's network controls are what
+actually stand between the instrument and the outside.
 
 ADR-0005: Qt (PyQt/PySide) for the GUIs
 -----------------------------------------
@@ -142,6 +163,33 @@ leave the most safety-critical logic untested.
 that models timing and failure, not merely success. This is real effort per
 driver and must be scoped as such.
 
+ADR-0007: Shipped default configuration
+---------------------------------------
+
+**Status:** Accepted
+
+**Context.** An earlier draft resolved configuration through four layers and
+required a daemon to refuse to start rather than default anything. That made
+every daemon's configuration long, mostly boilerplate, and slow to stand up on
+the bench.
+
+**Decision.** Each daemon ships a default configuration file next to its code
+and carries the same defaults as literals, so it behaves sensibly even if that
+file is missing. Instrument and deployment configuration supply only what
+differs. Three layers, not four.
+
+**Rationale.** Most configuration values are the same everywhere and are not
+safety-relevant: publication cadences, retry policy, log destinations. Making
+someone restate them per daemon adds work and adds places to get them wrong.
+
+**Consequences.** Two categories still have no defaults and still block
+startup when missing: hard limits with safe-state definitions, and hardware
+identity such as controller addresses and bus node numbers. A guessed limit
+looks like protection and is not; a guessed address commands the wrong device.
+Defaults are applied before validation rather than as a fallback for values
+that failed it, which is what keeps this safe. See
+:doc:`../architecture/configuration`.
+
 Open questions beyond the ADRs
 ------------------------------
 
@@ -154,12 +202,19 @@ to decide is missing.
 
    * - Question
      - Blocked on
-   * - Does the ICS perform acquisition and guiding?
-     - The requirements baseline. Substantially changes the daemon inventory
-       if yes.
-   * - Which detector controller per channel?
-     - Detector selection. Determines the ``zscam_*`` daemon count and the
-       readout mode vocabulary.
+   * - How does acquisition divide between Keck and ZShooter's imager?
+     - Agreement with WMKO. The imager sees a 2' field and provides
+       acquisition support, so the split is not simply "Keck acquires".
+   * - MAGIQ or STRATA?
+     - What WMKO has in place at first light in 2029. Determines what
+       ``zskeck_acq`` talks to.
+   * - What are the two unidentified detector systems?
+     - The design team. Nine of eleven are accounted for; if either of the
+       remaining two is a slit-viewer it changes the acquisition workflow.
+   * - What readout software do the LmAPD and qCMOS need?
+     - Detector selection. The VIS qCCD is covered: it runs on an Archon and
+       so uses ``camera-interface``. The NIR and imager focal planes have no
+       COO driver, and the LmAPD part is not yet chosen.
    * - What are the scientific observing modes?
      - The requirements baseline. Determines the observer GUI's configuration
        vocabulary and the required-daemon sets per mode.
@@ -169,9 +224,11 @@ to decide is missing.
      - The as-built electronics design.
    * - What does the DRP require in FITS headers?
      - Agreement with the data reduction pipeline team.
-   * - How does the ICS talk to the Keck 1 telescope?
-     - Agreement with WMKO: which protocol (KTL, mKTL), which telescope
-       keywords ZShooter may read, and what offset authority an instrument
-       holds.
-   * - Does WMKO or the ICS provide guiding?
-     - Agreement with WMKO. Removes or adds a substantial daemon.
+   * - Which EPICS process variables does the ICS read and write?
+     - Agreement with WMKO, along with the Channel Access client library and
+       whether ZShooter connects directly or through a WMKO access layer.
+   * - How does the ICS learn K1DM3 state?
+     - Agreement with WMKO. Whether the instrument is receiving light at all
+       depends on it.
+   * - What is the facility glycol interface?
+     - WMKO platform services. Determines the ``zshouse_glycol`` driver.

@@ -33,7 +33,7 @@ state and issue commands.
   not individual daemons. See :doc:`../interfaces/observer-gui`.
 - **Hard hat GUI**: the engineering interface used by support astronomers,
   observing assistants, and instrument engineers. May address device daemons
-  directly, under an explicit and visible engineering authority.
+  directly, with the subsystem in an explicit and visible engineering mode.
   See :doc:`../interfaces/hardhat-gui`.
 - **CLI and scripts**: the ``libby`` command-line client and ad-hoc
   engineering scripts, using the same keyword interface as everything else.
@@ -102,15 +102,14 @@ Where code lives
    │   ├── config/          # configuration loading and validation
    │   └── telemetry/       # telemetry publication helpers
    ├── daemons/
-   │   ├── zsimg/           # one directory per group
-   │   │   ├── motion/      # one directory per daemon scope
-   │   │   └── adc/
+   │   ├── zsfe/            # one directory per group
+   │   │   ├── selector/    # one directory per daemon scope
+   │   │   └── cal/
+   │   ├── zsimg/
+   │   ├── zsvis/
    │   ├── zsnir/
-   │   ├── zsblue/
-   │   ├── zsred/
-   │   ├── zscal/
    │   ├── zscam/
-   │   ├── zshk/
+   │   ├── zshouse/
    │   ├── zskeck/
    │   └── zsseq/
    ├── configs/             # per-daemon configuration, versioned

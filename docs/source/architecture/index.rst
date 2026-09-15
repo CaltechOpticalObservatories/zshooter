@@ -12,12 +12,9 @@ ZShooter-specific choices.
    principles
    layers
    messaging
-   gateways
-   broadcast
-   alerts
    keywords
    state-models
-   authority
    safety
+   gateways
    configuration
    observability
